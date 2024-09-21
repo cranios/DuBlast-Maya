@@ -3,7 +3,7 @@
 
 import sys
 import os
-from PySide2.QtWidgets import ( # pylint: disable=import-error disable=no-name-in-module
+from PySide6.QtWidgets import ( # pylint: disable=import-error disable=no-name-in-module
     QApplication,
     QDialog,
     QVBoxLayout,
@@ -11,11 +11,11 @@ from PySide2.QtWidgets import ( # pylint: disable=import-error disable=no-name-i
     QTextEdit,
     QPushButton
 )
-from PySide2.QtGui import ( # pylint: disable=no-name-in-module,import-error
+from PySide6.QtGui import ( # pylint: disable=no-name-in-module,import-error
     QIcon,
     QDesktopServices,
 )
-from PySide2.QtCore import ( # pylint: disable=no-name-in-module,import-error
+from PySide6.QtCore import ( # pylint: disable=no-name-in-module,import-error
     Slot,
     QUrl
 )

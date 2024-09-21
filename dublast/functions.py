@@ -29,10 +29,11 @@ from maya import cmds # pylint: disable=import-error
 from maya import mel # pylint: disable=import-error
 
 from dublast import dumaf
+from dublast.utils import getVideoPlayer
 
 def check_update():
     """Checks if an update is available"""
-    from dublast import TOOL_NAME, VERSION, IS_PRERELEASE
+    from dublast.constants import TOOL_NAME, VERSION, IS_PRERELEASE
     dumaf.utils.checkUpdate( TOOL_NAME, VERSION, discreet=True, preRelease=IS_PRERELEASE )
 
 def getTempDir():
@@ -55,7 +56,6 @@ def createPlayblast(filePath, size):
     # Get bin dir
     pluginFolder = os.path.dirname( cmds.pluginInfo('DuBlast', query=True, path=True) )
     ffmpegFile = pluginFolder + '/ffmpeg.exe'
-    ffplayFile = pluginFolder + '/ffplay.exe'
 
     # Get a temp dir for rendering the playblast
     tempDir = getTempDir()
@@ -95,6 +95,10 @@ def createPlayblast(filePath, size):
     # Get framerate
     framerate = mel.eval('float $fps = `currentTimeUnitToFPS`') # It's not in cmds!!
 
+    # Be careful, the number of "#" may be wrong, because maya....
+    ffmpegImageFile = imageFile.replace('.#', ".%5d")
+    ffmpegImageFile = ffmpegImageFile.replace('#',"")
+
     # Transcode using ffmpeg
     ffmpegArgs = [
         ffmpegFile,
@@ -102,7 +106,7 @@ def createPlayblast(filePath, size):
         '-y', # overwrite
         '-start_number', str(cmds.playbackOptions(q=True,minTime=True)),
         '-framerate', str(framerate),
-        '-i', imageFile.replace('####', "%5d"), # Image file
+        '-i', ffmpegImageFile, # Image file
     ]
     if soundFile != '':
         ffmpegArgs = ffmpegArgs + [
@@ -131,7 +135,11 @@ def createPlayblast(filePath, size):
 
     # Remove temp files
     shutil.rmtree(tempDir)
-    subprocess.Popen([ffplayFile, '-seek_interval', '0.1', filePath])
+    player = getVideoPlayer()
+    if player.endswith('ffplay.exe'):
+        subprocess.Popen([player, '-seek_interval', '0.1', filePath])
+    else:
+        subprocess.Popen([player, filePath])
     return
 
     # TEST

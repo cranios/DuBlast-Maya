@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from PySide2.QtWidgets import ( # pylint: disable=no-name-in-module disable=import-error
+from PySide6.QtWidgets import ( # pylint: disable=no-name-in-module disable=import-error
     QMainWindow,
     QVBoxLayout,
     QProgressBar,
@@ -8,7 +8,7 @@ from PySide2.QtWidgets import ( # pylint: disable=no-name-in-module disable=impo
     QPushButton,
 )
 
-from PySide2.QtCore import ( # pylint: disable=no-name-in-module disable=import-error
+from PySide6.QtCore import ( # pylint: disable=no-name-in-module disable=import-error
     Slot,
 )
 

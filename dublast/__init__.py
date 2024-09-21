@@ -20,8 +20,4 @@ Better Playblasts for Maya
 #======================= END GPL LICENSE BLOCK ========================
 
 from .command import DuBlastCmd
-
-TOOL_NAME = "DuBlast-Maya"
-VENDOR = "RxLaboratory"
-VERSION = "1.1.0"
-IS_PRERELEASE = False
+from .constants import VENDOR, VERSION
