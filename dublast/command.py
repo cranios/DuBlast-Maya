@@ -102,14 +102,18 @@ class DuBlastCmd( om.MPxCommand ):
             cmds.headsUpDisplay('DuFocalLength',section=9, block=0, blockSize='large', label='Focal Length: ' + focalLength,labelFontSize='large')
 
         # Save path
-        pbFilePath = os.path.dirname(currentFilePath)
-        pbFileName = os.path.basename(currentFilePath)
-        pbFileName = ".".join( pbFileName.split(".")[0:-1])
-        if comment != "":
-            pbFileName = pbFileName + "_" + comment
+        pbFolderPath = dialog.folder()
+        if pbFolderPath == '':
+            pbFolderPath = os.path.dirname(currentFilePath)
+        pbFileName = dialog.fileName()
+        if pbFileName == '':
+            pbFileName = os.path.basename(currentFilePath)
+            pbFileName = ".".join( pbFileName.split(".")[0:-1])        
+            if comment != "":
+                pbFileName = pbFileName + "_" + comment
 
         if thumbnail:
-            tnFilePath = pbFilePath + '/' + pbFileName + '.png'
+            tnFilePath = os.path.join(pbFolderPath, pbFileName + '.png')
             # Attempt to set window size
             dialog.setWindowSize()
             createThumbnail(tnFilePath)
@@ -117,7 +121,7 @@ class DuBlastCmd( om.MPxCommand ):
 
         if pb:
             # Extension
-            filePath = pbFilePath + '/' + pbFileName + '.mp4'
+            filePath = os.path.join(pbFolderPath, pbFileName + '.mp4')
             cmds.refresh()
             createPlayblast(filePath, size)
             print("Playblast saved: " + filePath)

@@ -19,7 +19,8 @@ The dialog with the preview options.
 #
 #======================= END GPL LICENSE BLOCK ========================
 
-from PySide2.QtWidgets import ( # pylint: disable=no-name-in-module,import-error
+import os
+from PySide6.QtWidgets import ( # pylint: disable=no-name-in-module,import-error
     QCheckBox,
     QDialog,
     QHBoxLayout,
@@ -30,20 +31,24 @@ from PySide2.QtWidgets import ( # pylint: disable=no-name-in-module,import-error
     QComboBox,
     QLineEdit,
     QPushButton,
-    QSlider
+    QSlider,
+    QFileDialog
 )
 
-from PySide2.QtCore import ( # pylint: disable=no-name-in-module,import-error
+from PySide6.QtCore import ( # pylint: disable=no-name-in-module,import-error
     Slot,
-    Qt
+    Qt,
+    QFileInfo
 )
 
 import maya.mel as mel  # pylint: disable=import-error
 import maya.cmds as cmds # pylint: disable=import-error
 
 import dublast.dumaf as maf
+from dublast.ui_dialog import Dialog
+from dublast.utils import getVideoPlayer
 
-class PreviewDialog( QDialog ):
+class PreviewDialog( Dialog ):
     """The dialog for preview options"""
 
     def __init__(self, parent=None):
@@ -53,17 +58,20 @@ class PreviewDialog( QDialog ):
         self.pbLayout = 'ramsesPlayblasterLayout'
         self.modelPanel = 'ramsesPlayblasterPanel'
 
+        self._setupMenu()
         self._setupUi()
         self._loadCameras()
         self.showRenderer()
         self._connectEvents()
+        self._loadSettings()
+
+    def _setupMenu(self):
+        self._resetAction = self.edit_menu.addAction("Reset defaults")
+        self._setPlayerAction = self.edit_menu.addAction("Set video player...")
 
     def _setupUi(self):
         self.setWindowTitle( "Create preview" )
-
-        mainLayout = QVBoxLayout()
-        mainLayout.setContentsMargins(6,6,6,6)
-        mainLayout.setSpacing(3)
+        self.setMinimumWidth(300)
 
         topLayout = QFormLayout()
         topLayout.setFieldGrowthPolicy( QFormLayout.AllNonFixedFieldsGrow )
@@ -124,6 +132,8 @@ class PreviewDialog( QDialog ):
         renderOptionsLayout.addWidget(self.onlyPolyBox)
         self.motionTrailBox = QCheckBox("Show Motion Trails")
         renderOptionsLayout.addWidget(self.motionTrailBox)
+        self.imagePlaneBox = QCheckBox("Show Image Plane")
+        renderOptionsLayout.addWidget(self.imagePlaneBox)
         self.showHudBox = QCheckBox("Show HUD")
         self.showHudBox.setChecked(True)
         renderOptionsLayout.addWidget(self.showHudBox)
@@ -141,7 +151,26 @@ class PreviewDialog( QDialog ):
         self._thumbnailBox.setChecked(True)
         topLayout.addRow("", self._thumbnailBox)
 
-        mainLayout.addLayout(topLayout)
+        folderLayout = QHBoxLayout()
+        folderLayout.setSpacing(3)
+        folderLayout.setContentsMargins(0,0,0,0)
+        topLayout.addRow("Folder:", folderLayout)
+
+        self.folderEdit = QLineEdit()
+        self.folderEdit.setPlaceholderText("Same as scene folder")
+        folderLayout.addWidget(self.folderEdit)
+
+        self.folderButton = QPushButton("Browse...")
+        folderLayout.addWidget(self.folderButton)
+
+        folderLayout.setStretch(0, 1)
+        folderLayout.setStretch(1, 0)
+
+        self.filenameEdit = QLineEdit()
+        self.filenameEdit.setPlaceholderText("Same as scene name")
+        topLayout.addRow("File name:", self.filenameEdit)
+
+        self.main_layout.addLayout(topLayout)
 
         buttonsLayout = QHBoxLayout()
         buttonsLayout.setSpacing(2)
@@ -149,11 +178,11 @@ class PreviewDialog( QDialog ):
         buttonsLayout.addWidget( self._renderButton )
         self._cancelButton = QPushButton("Cancel")
         buttonsLayout.addWidget( self._cancelButton )
-        mainLayout.addLayout( buttonsLayout )
-
-        self.setLayout(mainLayout)
+        self.main_layout.addLayout( buttonsLayout )
 
     def _connectEvents(self):
+        self._resetAction.triggered.connect( self._resetDefaults )
+        self._setPlayerAction.triggered.connect( self._setPlayer )
         self._renderButton.clicked.connect( self._ok )
         self._renderButton.clicked.connect( self.accept )
         self._cancelButton.clicked.connect( self.reject )
@@ -163,12 +192,14 @@ class PreviewDialog( QDialog ):
         self.useLightsBox.currentIndexChanged.connect( self._updateRenderer )
         self.displayTexturesBox.clicked.connect( self._updateRenderer )
         self.motionTrailBox.clicked.connect( self._updateRenderer )
+        self.imagePlaneBox.clicked.connect( self._updateRenderer )
         self.displayShadowsBox.clicked.connect( self._updateRenderer )
         self.cameraBox.currentIndexChanged.connect( self._updateRenderer )
         self.aaBox.clicked.connect( self._updateRenderer )
         self.aoBox.clicked.connect( self._updateRenderer )
         self.sizeSlider.valueChanged.connect( self.sizeEdit.setValue )
         self.sizeEdit.valueChanged.connect( self.sizeSlider.setValue )
+        self.folderButton.clicked.connect( self._browseFolder )
 
     def _updateRenderer(self):
         cam = self.cameraBox.currentData()
@@ -179,6 +210,7 @@ class PreviewDialog( QDialog ):
             displayTextures=self.displayTexturesBox.isChecked(),
             motionTrails=self.motionTrailBox.isChecked(),
             shadows=self.displayShadowsBox.isChecked(),
+            imagePlane=self.imagePlaneBox.isChecked(),
             edit=True)
 
         cmds.setAttr('hardwareRenderingGlobals.multiSampleEnable',self.aaBox.isChecked() ) # AA
@@ -231,10 +263,87 @@ class PreviewDialog( QDialog ):
         self._updateRenderer()
 
     def _ok(self):
+        self._saveSettings()
         if self.onlyPolyBox.isChecked():
             cmds.modelEditor(self.modelEditor, e=True, alo=False) # only polys, all off
             cmds.modelEditor(self.modelEditor, e=True, polymeshes=True) # polys
             cmds.modelEditor(self.modelEditor, e=True, motionTrails=self.motionTrailBox.isChecked() )
+
+    def _resetDefaults(self):
+        self.sizeEdit.setValue( 50 )
+        self.displayAppearenceBox.setCurrentText( "Smooth Shaded" )
+        self.useLightsBox.setCurrentText( "Default Lighting" )
+        self.displayTexturesBox.setChecked( True )
+        self.displayShadowsBox.setChecked( True )
+        self.aoBox.setChecked( True )
+        self.aaBox.setChecked( True )
+        self.onlyPolyBox.setChecked( True )
+        self.motionTrailBox.setChecked( False )
+        self.imagePlaneBox.setChecked( False )
+        self.showHudBox.setChecked( True )
+        self.folderEdit.setText( "" )
+        maf.options.save('dublast.videoPlayer', '')
+
+    def _loadSettings(self):
+        # Init
+        self.sizeEdit.setValue(
+            maf.options.get('dublast.size', 50)
+        )
+        self.displayAppearenceBox.setCurrentText(
+            maf.options.get('dublast.displayAppearance', "Smooth Shaded")
+        )
+        self.useLightsBox.setCurrentText(
+            maf.options.get('dublast.useLights', "Default Lighting")
+        )
+        self.displayTexturesBox.setChecked(
+            maf.options.get('dublast.displayTextures', 1) == 1
+        )
+        self.displayShadowsBox.setChecked(
+            maf.options.get('dublast.displayShadows', 1) == 1
+        )
+        self.aoBox.setChecked(
+            maf.options.get('dublast.ao', 1) == 1
+        )
+        self.aaBox.setChecked(
+            maf.options.get('dublast.aa', 1) == 1
+        )
+        self.onlyPolyBox.setChecked(
+            maf.options.get('dublast.onlyPoly', 1) == 1
+        )
+        self.motionTrailBox.setChecked(
+            maf.options.get('dublast.motionTrail', 0) == 1
+        )
+        self.imagePlaneBox.setChecked(
+            maf.options.get('dublast.imagePlane', 0) == 1
+        )
+        self.showHudBox.setChecked(
+            maf.options.get('dublast.showHud', 1) == 1
+        )
+        folder = maf.options.get('dublast.folder', "")
+        if not QFileInfo.exists(folder):
+            folder = ""
+        self.folderEdit.setText( folder )
+        self._updateRenderer()
+
+    def _saveSettings(self):
+        maf.options.save('dublast.size', self.sizeEdit.value())
+        maf.options.save('dublast.displayAppearance', self.displayAppearenceBox.currentText())
+        maf.options.save('dublast.useLights', self.useLightsBox.currentText())
+        maf.options.save('dublast.displayTextures', 1 if self.displayTexturesBox.isChecked() else 0)
+        maf.options.save('dublast.displayShadows', 1 if self.displayShadowsBox.isChecked() else 0)
+        maf.options.save('dublast.ao', 1 if self.aoBox.isChecked() else 0)
+        maf.options.save('dublast.aa', 1 if self.aaBox.isChecked() else 0)
+        maf.options.save('dublast.onlyPoly',1 if self.onlyPolyBox.isChecked() else 0)
+        maf.options.save('dublast.motionTrail', 1 if self.motionTrailBox.isChecked() else 0)
+        maf.options.save('dublast.imagePlane', 1 if self.imagePlaneBox.isChecked() else 0)
+        maf.options.save('dublast.showHud', 1 if self.showHudBox.isChecked() else 0)
+        maf.options.save('dublast.folder', self.folderEdit.text())
+
+    def _setPlayer(self):
+        current = getVideoPlayer()
+        new = QFileDialog.getOpenFileName(self, "Select the video player", os.path.dirname(current))[0]
+        if QFileInfo.exists(new):
+            maf.options.save('dublast.videoPlayer', new)
 
     Slot()
     def _updateLightsBox(self, index):
@@ -246,6 +355,12 @@ class PreviewDialog( QDialog ):
 
     def _loadCameras(self):
         maf.ui.update_cam_combobox(self.cameraBox)
+
+    Slot()
+    def _browseFolder(self):
+        f = QFileDialog.getExistingDirectory(self, "Select output folder", self.folderEdit.text() )
+        if QFileInfo.exists(f):
+            self.folderEdit.setText(f)
 
     def comment(self):
         """Returns the comment added by the user"""
@@ -270,6 +385,20 @@ class PreviewDialog( QDialog ):
     def playblast(self):
         """Do we have to create a playblast?"""
         return self._playblastBox.isChecked()
+
+    def folder(self):
+        """The output folder (empty string for auto)"""
+        return self.folderEdit.text()
+
+    def fileName(self):
+        """The filename, including the comment (empty string for auto)"""
+        fn = self.filenameEdit.text()
+        if fn == '':
+            return ''
+        if fn[-1] != "_":
+            fn = fn + "_"
+        fn = fn + self.commentEdit.text()
+        return fn
 
     Slot()
     def hideRenderer(self):

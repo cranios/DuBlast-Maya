@@ -60,6 +60,8 @@ def request(url, args=None, secured=True):
             sslContext = ssl._create_unverified_context()
             response = urlopen(url, context=sslContext)
 
+    print("Request: " + url)
+
     return response
 
 if __name__ == "__main__":
