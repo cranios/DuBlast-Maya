@@ -1,4 +1,4 @@
-# DuBlast for Maya
+# DuBlast for Maya 2025
 
 Better Playblasts for Maya
 
